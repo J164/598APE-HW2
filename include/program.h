@@ -126,7 +126,7 @@ void find_fitness(program_t d_prog, float *score, const param &params,
 void find_batched_fitness(int n_progs, program_t d_progs, float *score,
                           const param &params, const int n_rows,
                           const float *data, const float *y,
-                          const float *sample_weights);
+                          const float *sample_weights, float *y_pred);
 
 /**
  * @brief Computes and sets the fitness scores for a single program on the given
@@ -159,7 +159,7 @@ void set_fitness(program_t &d_prog, program &h_prog, const param &params,
 void set_batched_fitness(int n_progs, std::vector<program> &h_progs,
                          const param &params, const int n_rows,
                          const float *data, const float *y,
-                         const float *sample_weights);
+                         const float *sample_weights, float *y_pred);
 
 /**
  * @brief Returns precomputed fitness score of program,

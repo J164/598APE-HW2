@@ -91,7 +91,7 @@ void tournament_kernel(const std::vector<program> &progs, int *win_indices,
 void cpp_evolve(const std::vector<program> &h_oldprogs,
                 std::vector<program> &h_nextprogs, const int n_samples,
                 const float *data, const float *y, const float *sample_weights,
-                const param &params, const int generation, const int seed) {
+                const param &params, const int generation, const int seed, float *y_pred) {
   auto n_progs = params.population_size;
   auto tour_size = params.tournament_size;
   auto n_tours = n_progs; // at least num_progs tournaments
@@ -180,7 +180,7 @@ void cpp_evolve(const std::vector<program> &h_oldprogs,
 
   // Update raw fitness for all programs
   set_batched_fitness(n_progs, h_nextprogs, params, n_samples, data, y,
-                      sample_weights);
+                      sample_weights, y_pred);
 }
 
 float param::p_reproduce() const {
@@ -439,6 +439,7 @@ void symFit(const float *input, const float *labels,
   /* Begin training */
   auto gen = 0;
   params.num_epochs = 0;
+  std::vector<float> y_pred((uint64_t)n_rows * (uint64_t)params.population_size);
 
   while (gen < params.generations) {
     // Generate an init seed
@@ -446,7 +447,7 @@ void symFit(const float *input, const float *labels,
 
     // Evolve current generation
     cpp_evolve(h_currprogs, h_nextprogs, n_rows, input, labels, sample_weights,
-               params, (gen + 1), init_seed);
+               params, (gen + 1), init_seed, y_pred.data());
 
     // Update epochs
     ++params.num_epochs;
