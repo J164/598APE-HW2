@@ -234,7 +234,6 @@ void meanSquareError(const uint64_t n_samples, const uint64_t n_progs,
                      const math_t *Y, const math_t *Y_pred, const math_t *W,
                      math_t *out) {
 
-  std::vector<math_t> error(n_samples * n_progs);
   math_t N = static_cast<math_t>(n_samples);
 
   // Weight Sum
@@ -245,19 +244,12 @@ void meanSquareError(const uint64_t n_samples, const uint64_t n_progs,
 
   // Compute absolute differences
   for (uint64_t pid = 0; pid < n_progs; ++pid) {
+    math_t result = static_cast<math_t>(0);
     for (uint64_t i = 0; i < n_samples; ++i) {
-      error[pid * n_samples + i] = N * W[i] *
-                                   (Y_pred[pid * n_samples + i] - Y[i]) *
-                                   (Y_pred[pid * n_samples + i] - Y[i]) / WS;
+      result += (N * W[i] * (Y_pred[pid * n_samples + i] - Y[i]) * (Y_pred[pid * n_samples + i] - Y[i]) / WS) / N;
     }
-  }
 
-  // Average along rows
-  for (uint64_t pid = 0; pid < n_progs; ++pid) {
-    out[pid] = static_cast<math_t>(0);
-    for (uint64_t i = 0; i < n_samples; ++i) {
-      out[pid] += error[pid * n_samples + i] / N;
-    }
+    out[pid] = result;
   }
 }
 
@@ -279,7 +271,6 @@ template <typename math_t = float>
 void logLoss(const uint64_t n_samples, const uint64_t n_progs, const math_t *Y,
              const math_t *Y_pred, const math_t *W, math_t *out) {
   // Logistic error per sample
-  std::vector<math_t> error(n_samples * n_progs);
   math_t N = (math_t)n_samples;
 
   // Weight Sum
@@ -296,12 +287,17 @@ void logLoss(const uint64_t n_samples, const uint64_t n_progs, const math_t *Y,
   // adapt it for the weighted version (turned out pre-multiplying N just
   // worked). Improving numerical stability in CUDA is ... :)
 
+  std::vector<math_t> factor(n_samples);
+  for (uint64_t i = 0; i < n_samples; ++i) {
+    factor[i] = N * W[i] / WS;
+  }
+  
   for (uint64_t pid = 0; pid < n_progs; ++pid) {
+    math_t acc = static_cast<math_t>(0);
     for (uint64_t i = 0; i < n_samples; ++i) {
       math_t logsig;
       math_t yp = Y_pred[pid * n_samples + i];
       math_t y = Y[i];
-      math_t w = W[i];
       if (yp < -33.3)
         logsig = yp;
       else if (yp <= -18)
@@ -310,16 +306,10 @@ void logLoss(const uint64_t n_samples, const uint64_t n_progs, const math_t *Y,
         logsig = -log1pf(expf(-yp));
       else
         logsig = -expf(-yp);
-      error[pid * n_samples + i] = ((1 - y) * yp - logsig) * (N * w / WS);
+      acc += ((1 - y) * yp - logsig) * factor[i] / N;
     }
-  }
 
-  // Take average along rows
-  for (uint64_t pid = 0; pid < n_progs; ++pid) {
-    out[pid] = static_cast<math_t>(0);
-    for (uint64_t i = 0; i < n_samples; ++i) {
-      out[pid] += error[pid * n_samples + i] / N;
-    }
+    out[pid] = acc;
   }
 }
 
