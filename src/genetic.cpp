@@ -501,7 +501,7 @@ void symFit(const float *input, const float *labels,
 void symRegPredict(const float *input, const int n_rows,
                    const program_t &best_prog, float *output) {
   // Assume best_prog is on device
-  execute(best_prog, n_rows, 1, input, output);
+  execute(best_prog, n_rows, 1, input, nullptr, output);
 }
 
 void symClfPredictProbs(const float *input, const int n_rows,
@@ -509,7 +509,7 @@ void symClfPredictProbs(const float *input, const int n_rows,
                         float *output) {
 
   // Assume output is of shape [n_rows, 2] in colMajor format
-  execute(best_prog, n_rows, 1, input, output);
+  execute(best_prog, n_rows, 1, input, nullptr, output);
 
   // Apply 2 map operations
   if (params.transformer == transformer_t::sigmoid) {
@@ -545,7 +545,7 @@ void symTransform(const float *input, const param &params,
   // cudaStream_t stream = handle.get_stream();
   // Execute final_progs(ordered by fitness) on input
   // output of size [n_rows,hall_of_fame]
-  execute(final_progs, n_rows, params.n_components, input, output);
+  execute(final_progs, n_rows, params.n_components, input, nullptr, output);
 }
 
 } // namespace genetic

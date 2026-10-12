@@ -75,7 +75,7 @@ typedef program *program_t;
  * @param y_pred     Pointer to output of program evaluation
  */
 void execute(const program_t &d_progs, const int n_rows, const int n_progs,
-             const float *data, float *y_pred);
+             const float *data, const int *prog_idx, float *y_pred);
 
 /**
  * @brief Compute the loss based on the metric specified in the training

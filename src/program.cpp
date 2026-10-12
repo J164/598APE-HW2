@@ -11,6 +11,8 @@
 #include <program.h>
 #include <random>
 #include <stack>
+#include <string_view>
+#include <unordered_map>
 
 namespace genetic {
 
@@ -19,7 +21,7 @@ namespace genetic {
  * is stored in column major format.
  */
 template <int MaxSize = MAX_STACK_SIZE>
-void execute_kernel(const program_t d_progs, const float *data, float *y_pred,
+void execute_kernel(const program_t d_progs, const float *data, const int *prog_idx, float *y_pred,
                     const uint64_t n_rows, const uint64_t n_progs) {
   #pragma omp parallel
   {
@@ -27,7 +29,7 @@ void execute_kernel(const program_t d_progs, const float *data, float *y_pred,
 
     #pragma omp for schedule(dynamic, 4)
     for (uint64_t pid = 0; pid < n_progs; ++pid) {
-      program_t curr_p = d_progs + pid; // Current program
+      program_t curr_p = d_progs + (prog_idx ? prog_idx[pid] : pid); // Current program
 
       for (uint64_t batch_start = 0; batch_start < n_rows; batch_start += ROW_BATCH_SIZE) {
         int batch_size = std::min<uint64_t>(n_rows - batch_start, ROW_BATCH_SIZE);
@@ -100,8 +102,8 @@ void compute_metric(int n_rows, int n_progs, const float *y,
 }
 
 void execute(const program_t &d_progs, const int n_rows, const int n_progs,
-             const float *data, float *y_pred) {
-  execute_kernel(d_progs, data, y_pred, static_cast<uint64_t>(n_rows),
+             const float *data, const int *prog_idx, float *y_pred) {
+  execute_kernel(d_progs, data, prog_idx, y_pred, static_cast<uint64_t>(n_rows),
                  static_cast<uint64_t>(n_progs));
 }
 
@@ -111,7 +113,7 @@ void find_fitness(program_t d_prog, float *score, const param &params,
 
   // Compute predicted values
   std::vector<float> y_pred(n_rows);
-  execute(d_prog, n_rows, 1, data, y_pred.data());
+  execute(d_prog, n_rows, 1, data, nullptr, y_pred.data());
 
   // Compute error
   compute_metric(n_rows, 1, y, y_pred.data(), sample_weights, score, params);
@@ -122,11 +124,32 @@ void find_batched_fitness(int n_progs, program_t d_progs, float *score,
                           const float *data, const float *y,
                           const float *sample_weights, float *y_pred) {
 
-  execute(d_progs, n_rows, n_progs, data, y_pred);
+  std::unordered_map<std::string_view, int> unique_prog_map;
+  unique_prog_map.reserve(n_progs);
+  
+  std::vector<int> unique_progs;
+  unique_progs.reserve(n_progs);
+  std::vector<int> prog_indices(n_progs);
 
-  // Compute error
-  compute_metric(n_rows, n_progs, y, y_pred, sample_weights, score,
-                 params);
+  for (int pid = 0; pid < n_progs; ++pid) {
+    std::string_view key(reinterpret_cast<const char *>(d_progs[pid].nodes), sizeof(node) * d_progs[pid].len);
+
+    auto [it, inserted] = unique_prog_map.try_emplace(key, unique_progs.size());
+    if (inserted) {
+      unique_progs.push_back(pid);
+    }
+
+    prog_indices[pid] = it->second;
+  }
+
+  execute(d_progs, n_rows, unique_progs.size(), data, unique_progs.data(), y_pred);
+
+  std::vector<float> unique_scores(unique_progs.size());
+  compute_metric(n_rows, unique_progs.size(), y, y_pred, sample_weights, unique_scores.data(), params);
+
+  for (int pid = 0; pid < n_progs; ++pid) {
+    score[pid] = unique_scores[prog_indices[pid]];
+  }
 }
 
 void set_fitness(program &h_prog, const param &params, const int n_rows,
