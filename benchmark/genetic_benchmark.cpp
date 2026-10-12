@@ -295,14 +295,23 @@ void run_symbolic_regression(const std::string &dataset_file) {
   // }
 
   // Predict on top 2 candidates
-  insertionSortPrograms(final_programs, params.population_size);
+  std::vector<int> indices(params.population_size);
+  std::iota(indices.begin(), indices.end(), 0);
+  auto comparitor = [&](int a, int b) {
+    float x = std::isnan(final_programs[a].raw_fitness_) ? std::numeric_limits<float>::max() : final_programs[a].raw_fitness_;
+    float y = std::isnan(final_programs[b].raw_fitness_) ? std::numeric_limits<float>::max() : final_programs[b].raw_fitness_;
+    
+    return x < y || (x == y && a < b);
+  };
+
+  std::partial_sort(indices.begin(), indices.begin() + 2, indices.end(), comparitor);
 
   std::vector<float> y_pred1(X_test.size());
-  genetic::symRegPredict(X_test_flat.data(), X_test.size(), &final_programs[0],
+  genetic::symRegPredict(X_test_flat.data(), X_test.size(), &final_programs[indices[0]],
                          y_pred1.data());
 
   std::vector<float> y_pred2(X_test.size());
-  genetic::symRegPredict(X_test_flat.data(), X_test.size(), &final_programs[1],
+  genetic::symRegPredict(X_test_flat.data(), X_test.size(), &final_programs[indices[1]],
                          y_pred2.data());
 
   // Calculate MSE on test set
@@ -311,7 +320,7 @@ void run_symbolic_regression(const std::string &dataset_file) {
 
   // Extract the best programs and print some stats
   if (history.back().size() > 0) {
-    genetic::program_t best_program1 = &final_programs[0];
+    genetic::program_t best_program1 = &final_programs[indices[0]];
     std::cout << ";;Best program 1 details:" << std::endl;
     std::cout << ";;- Length: " << best_program1->len << " nodes" << std::endl;
     std::cout << ";;- Depth: " << best_program1->depth << std::endl;
@@ -323,7 +332,7 @@ void run_symbolic_regression(const std::string &dataset_file) {
     std::string program_str = genetic::stringify(*best_program1);
     std::cout << "(define best-program-1 " << program_str << ")" << std::endl;
 
-    genetic::program_t best_program2 = &final_programs[1];
+    genetic::program_t best_program2 = &final_programs[indices[1]];
     std::cout << ";;Best program 2 details:" << std::endl;
     std::cout << ";;- Length: " << best_program2->len << " nodes" << std::endl;
     std::cout << ";;- Depth: " << best_program2->depth << std::endl;
@@ -440,21 +449,31 @@ void run_symbolic_classification(const std::string &dataset_file) {
   // }
 
   // Predict classes for best 2 programs acc to training
-  insertionSortPrograms(final_programs, params.population_size);
+  std::vector<int> indices(params.population_size);
+  std::iota(indices.begin(), indices.end(), 0);
+  auto comparitor = [&](int a, int b) {
+    float x = std::isnan(final_programs[a].raw_fitness_) ? std::numeric_limits<float>::max() : final_programs[a].raw_fitness_;
+    float y = std::isnan(final_programs[b].raw_fitness_) ? std::numeric_limits<float>::max() : final_programs[b].raw_fitness_;
+    
+    return x < y || (x == y && a < b);
+  };
+
+  std::partial_sort(indices.begin(), indices.begin() + 2, indices.end(), comparitor);  
+
   std::vector<float> y_pred1(X_test.size());
   genetic::symClfPredict(X_test_flat.data(), X_test.size(), params,
-                         &final_programs[0], y_pred1.data());
+                         &final_programs[indices[0]], y_pred1.data());
 
   std::vector<float> y_pred2(X_test.size());
   genetic::symClfPredict(X_test_flat.data(), X_test.size(), params,
-                         &final_programs[1], y_pred2.data());
+                         &final_programs[indices[1]], y_pred2.data());
 
   float acc = utils::accuracy(y_test, y_pred1);
   float acc2 = utils::accuracy(y_test, y_pred2);
 
   // Extract the best programs and print some stats
   if (history.back().size() > 0) {
-    genetic::program_t best_program1 = &final_programs[0];
+    genetic::program_t best_program1 = &final_programs[indices[0]];
     std::cout << ";;Best program 1 details:" << std::endl;
     std::cout << ";;- Length: " << best_program1->len << " nodes" << std::endl;
     std::cout << ";;- Depth: " << best_program1->depth << std::endl;
@@ -466,7 +485,7 @@ void run_symbolic_classification(const std::string &dataset_file) {
     std::string program_str = genetic::stringify(*best_program1);
     std::cout << "(define best-program-1 " << program_str << ")" << std::endl;
 
-    genetic::program_t best_program2 = &final_programs[1];
+    genetic::program_t best_program2 = &final_programs[indices[1]];
     std::cout << ";;Best program 2 details:" << std::endl;
     std::cout << ";;- Length: " << best_program2->len << " nodes" << std::endl;
     std::cout << ";;- Depth: " << best_program2->depth << std::endl;
@@ -595,8 +614,15 @@ void run_symbolic_reconstruction(const std::string &png_file, int K) {
       genetic::symFit(X_train_flat.data(), y_train.data(),
                       sample_weights.data(), X_train.size(),
                       params.num_features, params, final_programs, history);
-      insertionSortPrograms(final_programs, params.population_size);
-      genetic::program_t best_program = &final_programs[0];
+      
+      auto comparitor = [](const genetic::program &a, const genetic::program &b) {
+        float x = std::isnan(a.raw_fitness_) ? std::numeric_limits<float>::max() : a.raw_fitness_;
+        float y = std::isnan(b.raw_fitness_) ? std::numeric_limits<float>::max() : b.raw_fitness_;
+        
+        return x < y;
+      };
+      
+      genetic::program_t best_program = std::min_element(final_programs, final_programs + params.population_size, comparitor);
 
       std::vector<float> predictions(X_test.size());
       genetic::symRegPredict(X_test_flat.data(), X_test.size(), best_program,
