@@ -21,27 +21,31 @@ namespace genetic {
 template <int MaxSize = MAX_STACK_SIZE>
 void execute_kernel(const program_t d_progs, const float *data, float *y_pred,
                     const uint64_t n_rows, const uint64_t n_progs) {
-  std::vector<float> data_stack(MaxSize * ROW_BATCH_SIZE);
+  #pragma omp parallel
+  {
+    std::vector<float> data_stack(MaxSize * ROW_BATCH_SIZE);
 
-  for (uint64_t pid = 0; pid < n_progs; ++pid) {
-    program_t curr_p = d_progs + pid; // Current program
+    #pragma omp for schedule(dynamic, 4)
+    for (uint64_t pid = 0; pid < n_progs; ++pid) {
+      program_t curr_p = d_progs + pid; // Current program
 
-    for (uint64_t batch_start = 0; batch_start < n_rows; batch_start += ROW_BATCH_SIZE) {
-      int batch_size = std::min<uint64_t>(n_rows - batch_start, ROW_BATCH_SIZE);
-      int stack_pointer = 0;
+      for (uint64_t batch_start = 0; batch_start < n_rows; batch_start += ROW_BATCH_SIZE) {
+        int batch_size = std::min<uint64_t>(n_rows - batch_start, ROW_BATCH_SIZE);
+        int stack_pointer = 0;
 
-      for (int i = curr_p->len - 1; i >= 0; --i) {
-        float *in_a = data_stack.data() + (stack_pointer - 1) * ROW_BATCH_SIZE;
-        float *in_b = data_stack.data() + (stack_pointer - 2) * ROW_BATCH_SIZE;
-        float *out = data_stack.data() + stack_pointer * ROW_BATCH_SIZE;
+        for (int i = curr_p->len - 1; i >= 0; --i) {
+          float *in_a = data_stack.data() + (stack_pointer - 1) * ROW_BATCH_SIZE;
+          float *in_b = data_stack.data() + (stack_pointer - 2) * ROW_BATCH_SIZE;
+          float *out = data_stack.data() + stack_pointer * ROW_BATCH_SIZE;
 
-        int arity = detail::evaluate_node(curr_p->nodes[i], data, n_rows, batch_start, batch_size, in_a, in_b, out);
+          int arity = detail::evaluate_node(curr_p->nodes[i], data, n_rows, batch_start, batch_size, in_a, in_b, out);
 
-        stack_pointer += 1 - arity;
+          stack_pointer += 1 - arity;
+        }
+
+        // Outputs stored in col-major format
+        std::copy(data_stack.begin(), data_stack.begin() + batch_size, y_pred + pid * n_rows + batch_start);
       }
-
-      // Outputs stored in col-major format
-      std::copy(data_stack.begin(), data_stack.begin() + batch_size, y_pred + pid * n_rows + batch_start);
     }
   }
 }

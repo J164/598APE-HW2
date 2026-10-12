@@ -243,6 +243,7 @@ void meanSquareError(const uint64_t n_samples, const uint64_t n_progs,
   }
 
   // Compute absolute differences
+  #pragma omp parallel for schedule(static)
   for (uint64_t pid = 0; pid < n_progs; ++pid) {
     math_t result = static_cast<math_t>(0);
     for (uint64_t i = 0; i < n_samples; ++i) {
@@ -292,6 +293,7 @@ void logLoss(const uint64_t n_samples, const uint64_t n_progs, const math_t *Y,
     factor[i] = N * W[i] / WS;
   }
   
+  #pragma omp parallel for schedule(static)
   for (uint64_t pid = 0; pid < n_progs; ++pid) {
     math_t acc = static_cast<math_t>(0);
     for (uint64_t i = 0; i < n_samples; ++i) {

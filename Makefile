@@ -1,5 +1,5 @@
 CXX := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -I include -I. -flto -O3 -g -march=native -ffp-contract=off
+CXXFLAGS := -std=c++17 -Wall -Wextra -I include -I. -flto -O3 -g -march=native -ffp-contract=off -fopenmp
 
 # Directories
 SRC_DIR := src
