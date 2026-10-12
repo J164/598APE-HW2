@@ -10,4 +10,6 @@ const int GENE_TPB = 256;
 // Max size of stack used for AST evaluation
 const int MAX_STACK_SIZE = 20;
 
+const int ROW_BATCH_SIZE = 64;
+
 }  // namespace genetic

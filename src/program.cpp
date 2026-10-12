@@ -21,33 +21,27 @@ namespace genetic {
 template <int MaxSize = MAX_STACK_SIZE>
 void execute_kernel(const program_t d_progs, const float *data, float *y_pred,
                     const uint64_t n_rows, const uint64_t n_progs) {
+  std::vector<float> data_stack(MaxSize * ROW_BATCH_SIZE);
+
   for (uint64_t pid = 0; pid < n_progs; ++pid) {
-    for (uint64_t row_id = 0; row_id < n_rows; ++row_id) {
+    program_t curr_p = d_progs + pid; // Current program
 
-      stack<float, MaxSize> eval_stack;
-      program_t curr_p = d_progs + pid; // Current program
+    for (uint64_t batch_start = 0; batch_start < n_rows; batch_start += ROW_BATCH_SIZE) {
+      int batch_size = std::min<uint64_t>(n_rows - batch_start, ROW_BATCH_SIZE);
+      int stack_pointer = 0;
 
-      int end = curr_p->len - 1;
-      node *curr_node = curr_p->nodes + end;
+      for (int i = curr_p->len - 1; i >= 0; --i) {
+        float *in_a = data_stack.data() + (stack_pointer - 1) * ROW_BATCH_SIZE;
+        float *in_b = data_stack.data() + (stack_pointer - 2) * ROW_BATCH_SIZE;
+        float *out = data_stack.data() + stack_pointer * ROW_BATCH_SIZE;
 
-      float res = 0.0f;
-      float in[2] = {0.0f, 0.0f};
+        int arity = detail::evaluate_node(curr_p->nodes[i], data, n_rows, batch_start, batch_size, in_a, in_b, out);
 
-      while (end >= 0) {
-        if (detail::is_nonterminal(curr_node->t)) {
-          int ar = detail::arity(curr_node->t);
-          in[0] = eval_stack.pop(); // Min arity of function is 1
-          if (ar > 1)
-            in[1] = eval_stack.pop();
-        }
-        res = detail::evaluate_node(*curr_node, data, n_rows, row_id, in);
-        eval_stack.push(res);
-        curr_node--;
-        end--;
+        stack_pointer += 1 - arity;
       }
 
       // Outputs stored in col-major format
-      y_pred[pid * n_rows + row_id] = eval_stack.pop();
+      std::copy(data_stack.begin(), data_stack.begin() + batch_size, y_pred + pid * n_rows + batch_start);
     }
   }
 }
