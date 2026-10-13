@@ -193,3 +193,54 @@ Run the docker build for the first time to setup all the environments you need
 ```
 
 If you now run `./dockerrun.sh` you will enter an interactive bash session with all the packages from docker installed (that script by default uses `vim/598ape`, feel free to replace it with whatever location you like if you built from scratch). The current directory (aka this folder) is mounted within `/host`. Any files you create on your personal machine will be available there, and anything you make in the container in that folder will be available on your personal machine.
+
+## Reproducing the Report Results
+
+Build the Docker image and enter it:
+
+```bash
+cd docker
+sudo docker build -t 598ape .
+cd ..
+sudo ./dockerrun.sh 598ape
+
+cd /host
+```
+
+### Optimizations
+
+Each commit in the git history after the baseline commit represents one optimization from the report.
+
+| # | Report optimization | Commit |
+|---|---------------------|--------|
+| 0 | Baseline | `f19cc63` |
+| 1 | Compiler flags | `b918cf8` |
+| 2 | Use n mins instead of insertion sort | `b2d8d78` |
+| 3 | Avoid intermediate buffer in error computations | `8664795` |
+| 4 | Reuse large prediction buffer | `e9633c1` |
+| 5 | Batch data row evaluation to avoid reinterpreting the program each time | `9d743a4` |
+| 6 | Parallelize `execute_kernel` and `compute_metric` | `02f5617` |
+| 7 | Evaluate unique programs only once | `7ee821c` |
+
+### Build
+
+```bash
+git checkout <commit hash>
+make clean && make -j
+```
+
+### Benchmark
+
+Run each test case three times and take the trial with the minimum time to reproduce the results from Figure 1 of the report. Run from the repository root.
+
+```bash
+./genetic_benchmark diabetes > diabetes.rkt
+
+./genetic_benchmark cancer > cancer.rkt
+
+./genetic_benchmark housing > housing.rkt
+
+./genetic_benchmark silk-wave > silk-wave.rkt
+
+./genetic_benchmark square-wave > square-wave.rkt
+```
